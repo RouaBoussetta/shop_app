@@ -1,6 +1,9 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shop_app/models/http_exception.dart';
+import 'package:shop_app/providers/auth.dart';
 
 class AuthScreen extends StatelessWidget {
   static const routeName = 'auth';
@@ -92,6 +95,8 @@ class _AuthCardState extends State<AuthCard>
   Animation<Offset> _slideAnimation;
   Animation<double> _opacityAnimation;
 
+  var error;
+
   @override
   void dispose() {
     super.dispose();
@@ -115,40 +120,76 @@ class _AuthCardState extends State<AuthCard>
         .animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
   }
 
-
-Future<void> submit() async{
-  if(!_formKey.currentState.validate()){
-    return;
-  }
-  setState(() {
-    _isLoading=true;    
-  });
-  try{
-
-  }catch(error){
-
-  }
-
-  setState(() {
-    _isLoading=false;
-  });
-}
-
-void _switchAuthMode(){
-  if(_authMode==AuthMode.login){
+  Future<void> _submit() async {
+    if (!_formKey.currentState.validate()) {
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    _formKey.currentState.save();
     setState(() {
-      
-      _authMode=AuthMode.SignUp;
+      _isLoading = true;
     });
-    _controller.forward();
-  }else{
-        setState(() {
-      
-      _authMode=AuthMode.login;
+
+    try {
+      if (_authMode == AuthMode.login) {
+        await Provider.of<Auth>(context, listen: false)
+            .login(_authData['email'], _authData['password']);
+      } else {
+        await Provider.of<Auth>(context, listen: false)
+            .signUp(_authData['email'], _authData['password']);
+      }
+    } on HttpException catch (error) {
+      var errorMessage = 'Authentic ation failed';
+      if (error.toString().contains('EMAIL_EXISTS')) {
+        errorMessage = " this email is already in use";
+      } else if (error.toString().contains('INVALID_EMAIL')) {
+        errorMessage = "this email address is not valid ";
+      } else if (error.toString().contains('WEAK_PASSWORD')) {
+        errorMessage = "this password is too weak";
+      } else if (error.toString().contains('EMAIL_NOT_FOUND')) {
+        errorMessage = "email not found";
+      } else if (error.toString().contains('INVALID_PASSWORD')) {
+        errorMessage = "invalid password";
+      }
+      _showErrorDialog(errorMessage);
+    } catch (error) {
+      const errorMessage = 'Could not authenticate you. Please try again later';
+      _showErrorDialog(errorMessage);
+    }
+
+    setState(() {
+      _isLoading = false;
     });
-    _controller.reverse();
   }
-}
+
+  void _switchAuthMode() {
+    if (_authMode == AuthMode.login) {
+      setState(() {
+        _authMode = AuthMode.SignUp;
+      });
+      _controller.forward();
+    } else {
+      setState(() {
+        _authMode = AuthMode.login;
+      });
+      _controller.reverse();
+    }
+  }
+
+  void _showErrorDialog(String errorMessage) {
+    showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+              title: Text('An Error Occurred'),
+              content: Text(errorMessage),
+              actions: [
+                FlatButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: Text('Okay!'))
+              ],
+            ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final deviceSize = MediaQuery.of(context).size;
@@ -215,40 +256,39 @@ void _switchAuthMode(){
                         decoration:
                             InputDecoration(labelText: 'Confirm Password'),
                         obscureText: true,
-                        validator:_authMode == AuthMode.SignUp? (val) {
-                          if (val!=_passwordController.text || val.length < 5) {
-                            return 'Password do not match!';
-                          }
-                          return null;
-                        }:null,
+                        validator: _authMode == AuthMode.SignUp
+                            ? (val) {
+                                if (val != _passwordController.text) {
+                                  return 'Password do not match!';
+                                }
+                                return null;
+                              }
+                            : null,
                       ),
                     ),
                   ),
                 ),
-
-                SizedBox(height: 20,),
-
-                if(_isLoading) CircularProgressIndicator(),
-                 RaisedButton(
-                  child :Text(_authMode==AuthMode.login?'LOGIN':'SIGNUP'),
-                  onPressed: submit,
-                  shape : RoundedRectangleBorder(
-                    borderRadius : BorderRadius.circular(30)),
-                    padding: EdgeInsets.symmetric(horizontal: 30,vertical: 8),
-                    color: Theme.of(context).primaryColor,
-                    textColor: Theme.of(context).primaryTextTheme.headline6.color,
-
+                SizedBox(
+                  height: 20,
+                ),
+                if (_isLoading) CircularProgressIndicator(),
+                RaisedButton(
+                  child: Text(_authMode == AuthMode.login ? 'LOGIN' : 'SIGNUP'),
+                  onPressed: _submit,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30)),
+                  padding: EdgeInsets.symmetric(horizontal: 30, vertical: 8),
+                  color: Theme.of(context).primaryColor,
+                  textColor: Theme.of(context).primaryTextTheme.headline6.color,
                 ),
                 FlatButton(
                   onPressed: _switchAuthMode,
-                   child: Text('${_authMode==AuthMode.login?'SIGNUP':'LOGIN'} INSTEAD'),
-                   padding: EdgeInsets.symmetric(horizontal: 30,vertical: 4),
-                   //color: Theme.of(context).primaryColor,
-                    textColor: Theme.of(context).primaryColor,
-                   
-                   )
-             
-             
+                  child: Text(
+                      '${_authMode == AuthMode.login ? 'SIGNUP' : 'LOGIN'} INSTEAD'),
+                  padding: EdgeInsets.symmetric(horizontal: 30, vertical: 4),
+                  //color: Theme.of(context).primaryColor,
+                  textColor: Theme.of(context).primaryColor,
+                )
               ],
             ),
           ),
